@@ -1,0 +1,70 @@
+name: Deploy to Server
+
+on:
+  push:
+    branches:
+      - main  # or the branch you want to deploy from
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Install Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '20'
+
+    - name: Install dependencies
+      run: npm install
+
+    - name: Build Next.js app
+      run: npm run build
+
+    - name: Install SSH client
+      run: sudo apt-get update && sudo apt-get install -y ssh
+
+    - name: Add SSH key
+      uses: webfactory/ssh-agent@v0.7.0
+      with:
+        ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+    - name: Deploy to server
+      run: |
+        ssh -o StrictHostKeyChecking=no user@example.com << 'EOF'
+          set -e
+
+          # Variables
+          CURRENT_CONTAINER=\$`docker ps --filter "name=container" --format "{{.Names}}"`
+          if [ "\$CURRENT_CONTAINER" == "container-blue" ]; then
+            NEW_CONTAINER="container-green"
+            OLD_CONTAINER="container-blue"
+          else
+            NEW_CONTAINER="container-blue"
+            OLD_CONTAINER="container-green"
+          fi
+
+          # Pull latest code
+          cd project
+          git pull
+
+          # Build and run the new container
+          docker build -t container .
+          docker stop $OLD_CONTAINER
+
+          docker run -d --name $NEW_CONTAINER -p 3000:3000 container
+
+          sleep 10
+
+          if [ $? -eq 0 ]; then
+            docker rm $OLD_CONTAINER
+          else
+            docker start $OLD_CONTAINER
+          fi
+          docker update --restart=always $NEW_CONTAINER
+
+          # Clean up old images
+          docker image prune -f
