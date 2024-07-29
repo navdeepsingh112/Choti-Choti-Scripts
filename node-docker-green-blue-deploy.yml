@@ -3,12 +3,15 @@ name: Deploy to Server
 on:
   push:
     branches:
-      - main  # or the branch you want to deploy from
+      - main
 
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
 
+    env:
+      NEXT_PUBLIC_CLIENT_URL: ${{ secrets.NEXT_PUBLIC_CLIENT_URL }}
+      
     steps:
     - name: Checkout code
       uses: actions/checkout@v3
@@ -34,28 +37,30 @@ jobs:
 
     - name: Deploy to server
       run: |
-        ssh -o StrictHostKeyChecking=no user@example.com << 'EOF'
+        ssh -o StrictHostKeyChecking=no user@example.in << 'EOF'
           set -e
 
           # Variables
-          CURRENT_CONTAINER=\$`docker ps --filter "name=container" --format "{{.Names}}"`
-          if [ "\$CURRENT_CONTAINER" == "container-blue" ]; then
-            NEW_CONTAINER="container-green"
-            OLD_CONTAINER="container-blue"
+          CURRENT_CONTAINER=`docker ps --filter "name=example" --format "{{.Names}}"`
+          echo $CURRENT_CONTAINER
+          if [ "$CURRENT_CONTAINER" = "example-blue" ]; then
+            NEW_CONTAINER="example-green"
+            OLD_CONTAINER="example-blue"
           else
-            NEW_CONTAINER="container-blue"
-            OLD_CONTAINER="container-green"
+            NEW_CONTAINER="example-blue"
+            OLD_CONTAINER="example-green"
           fi
 
           # Pull latest code
-          cd project
-          git pull
+          cd storoo
+          git fetch --all
+          git reset --hard origin/main
 
           # Build and run the new container
-          docker build -t container .
+          docker build --no-cache -t storoo .
           docker stop $OLD_CONTAINER
 
-          docker run -d --name $NEW_CONTAINER -p 3000:3000 container
+          docker run -d --name $NEW_CONTAINER -p 3000:3000 example
 
           sleep 10
 
